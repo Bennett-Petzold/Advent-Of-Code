@@ -25,7 +25,7 @@ fn main() {
     let part2: u32 = games
         .iter()
         .map(|game| game.mins())
-        .map(|out_vec| out_vec.into_iter().reduce(|acc, x| acc * x).unwrap())
+        .map(|out_vec| out_vec.into_iter().product::<u32>())
         .sum();
     println!("{part2}");
 }
