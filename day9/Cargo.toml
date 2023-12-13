@@ -8,10 +8,25 @@ license = "GPL-2.0-or-later"
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = []
+simd = [] # Requires nightly as of 12/9/2023
+
 [[bin]]
 name = "day8"
 path = "src/main.rs"
 
+[dev-dependencies]
+criterion = "0.5.1"
+lazy_static = "1.4.0"
+seq-macro = "0.3.5"
+
+[[bench]]
+name = "solution_speeds"
+harness = false
+
 [dependencies]
 anyhow = "1.0.75"
 itertools = "0.12.0"
+num = "0.4.1"
+rayon = "1.8.0"
