@@ -25,11 +25,17 @@ fn main() {
     left.sort_unstable();
     right.sort_unstable();
 
+    part_1(left.clone(), right.clone());
+    part_2(left, right);
+}
+
+fn part_1(left: Vec<usize>, right: Vec<usize>) {
     let pairs = left.iter().zip(right.iter());
     let total_diff: usize = pairs.map(|(l, r)| l.abs_diff(*r)).sum();
     println!("{total_diff}");
+}
 
-    // Part 2
+fn part_2(left: Vec<usize>, right: Vec<usize>) {
     let left_occurs = left.into_iter().chunk_by(|x| *x);
     let left_occurs = left_occurs.into_iter().map(|(key, group)| ListOccurrence {
         num: key,
