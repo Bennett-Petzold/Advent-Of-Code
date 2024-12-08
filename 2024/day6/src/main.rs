@@ -344,13 +344,6 @@ impl GuardMap {
                     } else {
                         let loops = self.speculate_loop(&guard, &next_guard, &unique);
 
-                        // New tile is unique, insert and set as the new val
-                        unique.insert(insert_pos, next_guard);
-                        guard = next_guard;
-
-                        #[cfg(feature = "print")]
-                        print_unique.push(next_guard.pos());
-
                         #[cfg(not(feature = "print"))]
                         if loops {
                             num_blocks += 1;
@@ -368,13 +361,23 @@ impl GuardMap {
                             }
                             print_unique = print_vec_deduped.into_iter().rev().collect();
 
+                            let mut rotated_guard = guard;
+                            rotated_guard.rotate();
+
                             self.print_map(
-                                &guard,
+                                &rotated_guard,
                                 print_unique.iter().cloned(),
                                 Some(next_guard.pos()),
                                 spec_unique_print.into_iter(),
                             );
                         }
+
+                        // New tile is unique, insert and set as the new val
+                        unique.insert(insert_pos, next_guard);
+                        guard = next_guard;
+
+                        #[cfg(feature = "print")]
+                        print_unique.push(next_guard.pos());
                     }
                 } else {
                     // New tile is not unique, set as the new val
@@ -408,13 +411,6 @@ impl GuardMap {
 
         {
             let mut tiles = vec![vec![" ".to_string(); self.max_x]; self.max_y];
-
-            let guard_char = match guard.dir() {
-                GuardDir::Up => "^",
-                GuardDir::Right => ">",
-                GuardDir::Down => "v",
-                GuardDir::Left => "<",
-            };
 
             let colors: Vec<_> = colorgrad::preset::turbo()
                 .colors(unique.len() + (unique.len() / 5))
@@ -457,6 +453,13 @@ impl GuardMap {
                 tiles[self.guard.pos().y][self.guard.pos().x] =
                     "^".truecolor(color[0], color[1], color[2]).to_string();
             }
+
+            let guard_char = match guard.dir() {
+                GuardDir::Up => "^",
+                GuardDir::Right => ">",
+                GuardDir::Down => "v",
+                GuardDir::Left => "<",
+            };
 
             tiles[guard.pos().y][guard.pos().x] = guard_char.to_string();
             if let Some(blockage) = blockage {
