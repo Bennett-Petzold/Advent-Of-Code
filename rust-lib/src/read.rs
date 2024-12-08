@@ -6,7 +6,9 @@ use std::{
 
 /// Return input lines (given as command arguments)
 pub fn input() -> impl Iterator<Item = String> {
-    BufReader::new(args().skip(1).map(|arg| File::open(arg)).unwrap())
-        .lines()
-        .map(|line| line.unwrap())
+    args().skip(1).flat_map(|arg| {
+        BufReader::new(File::open(arg).unwrap())
+            .lines()
+            .map(|line| line.unwrap())
+    })
 }
