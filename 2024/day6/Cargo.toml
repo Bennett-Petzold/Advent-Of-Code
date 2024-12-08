@@ -1,0 +1,13 @@
+[package]
+name = "day6"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+print = ["dep:colorgrad", "dep:colored"]
+
+[dependencies]
+advent-rust-lib = { path = "../../rust-lib" }
+colored = { version = "2.1.0", optional = true }
+colorgrad = { version = "0.7.0", optional = true }

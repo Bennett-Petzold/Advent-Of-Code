@@ -1,5 +1,5 @@
 /// Position in a 2D grid
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Pos2D {
     pub x: usize,
     pub y: usize,
