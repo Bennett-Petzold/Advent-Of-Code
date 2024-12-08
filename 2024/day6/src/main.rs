@@ -186,7 +186,12 @@ impl GuardMap {
                 }
             }
 
-            self.print_map(&guard, print_vec_deduped.into_iter().rev(), None);
+            self.print_map(
+                &guard,
+                print_vec_deduped.into_iter().rev(),
+                None,
+                std::iter::empty(),
+            );
         }
 
         unique.len().saturating_sub(1)
@@ -224,11 +229,11 @@ impl GuardMap {
                         speculative_guard.rotate();
                         let mut overlap = false;
 
+                        let mut private_loop = vec![speculative_guard];
+
                         if unique.binary_search(&speculative_guard).is_ok() {
                             overlap = true
                         } else {
-                            let mut private_loop = vec![speculative_guard];
-
                             while speculative_guard.pos().x < self.max_x
                                 && speculative_guard.pos().y < self.max_y
                             {
@@ -286,6 +291,7 @@ impl GuardMap {
                                 &guard,
                                 print_unique.iter().cloned(),
                                 Some(next_guard.pos()),
+                                private_loop.iter().map(|x| x.pos()),
                             );
 
                             //println!("{:?}", guard);
@@ -327,12 +333,16 @@ impl GuardMap {
 
     /// Debug print
     #[cfg(feature = "print")]
-    pub fn print_map<I: ExactSizeIterator<Item = Pos2D>>(
+    pub fn print_map<I0, I1>(
         &self,
         guard: &Guard,
-        unique: I,
+        unique: I0,
         blockage: Option<Pos2D>,
-    ) {
+        speculative: I1,
+    ) where
+        I0: ExactSizeIterator<Item = Pos2D>,
+        I1: ExactSizeIterator<Item = Pos2D>,
+    {
         use colored::Colorize;
         use colorgrad::Gradient;
 
@@ -366,6 +376,26 @@ impl GuardMap {
                 let color = colors[0].to_rgba8();
                 tiles[self.guard.pos().y][self.guard.pos().x] =
                     "^".truecolor(color[0], color[1], color[2]).to_string();
+            }
+
+            {
+                let colors_speculative: Vec<_> = colorgrad::preset::turbo()
+                    .colors(speculative.len() + (speculative.len() / 5))
+                    .into_iter()
+                    .skip(speculative.len() / 5)
+                    .collect();
+
+                speculative
+                    .into_iter()
+                    .zip(colors_speculative.iter())
+                    .for_each(|(pos, color)| {
+                        if let Some(tile) =
+                            tiles.get_mut(pos.y).and_then(|line| line.get_mut(pos.x))
+                        {
+                            let color = color.to_rgba8();
+                            *tile = "$".truecolor(color[0], color[1], color[2]).to_string();
+                        }
+                    });
             }
 
             tiles[guard.pos().y][guard.pos().x] = guard_char.to_string();
