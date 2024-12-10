@@ -1,0 +1,10 @@
+[package]
+name = "day9"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+print_disk = []
+
+[dependencies]
+advent-rust-lib = { path = "../../rust-lib" }
