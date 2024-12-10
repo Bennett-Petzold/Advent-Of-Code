@@ -1,4 +1,4 @@
-use advent_rust_lib::{read::input, signed::SignedUsize};
+use advent_rust_lib::read::input;
 
 fn main() {
     let disk = Disk::from_input_line(input().next().unwrap());
