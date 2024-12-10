@@ -1,3 +1,41 @@
+use std::ops::Add;
+
+use crate::grid::Pos2D;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Direction {
+    pub fn all() -> [Self; 4] {
+        [Self::Up, Self::Down, Self::Left, Self::Right]
+    }
+
+    pub fn reverse(self) -> Self {
+        match self {
+            Self::Up => Self::Down,
+            Self::Down => Self::Up,
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+        }
+    }
+}
+
+impl Pos2D {
+    pub fn step_dir(self, dir: Direction) -> Option<Self> {
+        match dir {
+            Direction::Up => self.up(),
+            Direction::Down => self.down(),
+            Direction::Left => self.left(),
+            Direction::Right => self.right(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum DirectionSet {
     Empty,
@@ -97,60 +135,43 @@ impl Add for DirectionSet {
     }
 }
 
-impl Trail {
-    fn surrounding_valid_with_dirs(
-        &self,
-        point: Pos2D,
-        height: u8,
-        check_directions: DirectionSet,
-    ) -> impl Iterator<Item = (Pos2D, DirectionSet)> + use<'_> {
-        check_directions
-            .flat_map(move |dir| {
-                point
-                    .step_dir(dir)
-                    .map(|next_point| (next_point, DirectionSet::single(dir)))
-            })
-            .filter(move |(next_point, _)| {
-                self.arr[self.flatten_point(*next_point)].height == height
-            })
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SafeDirectionSet(DirectionSet);
+
+impl Iterator for SafeDirectionSet {
+    type Item = Direction;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+impl SafeDirectionSet {
+    pub fn reverse(self) -> Self {
+        Self(self.0.reverse())
     }
 
-    pub fn num_paths_with_dirs(&mut self) -> u64 {
-        let mut endpoints: Vec<_> = self
-            .arr
-            .iter()
-            .enumerate()
-            .filter(|(_, loc)| (loc.height == 9))
-            .map(|(idx, _)| (ValuedLoc::from_nine(self, idx), DirectionSet::all()))
-            .collect();
+    pub fn all() -> Self {
+        Self(DirectionSet::all())
+    }
 
-        for height in (0..9).rev() {
-            let mut new_endpoints: Vec<(ValuedLoc, DirectionSet)> =
-                Vec::with_capacity(endpoints.len() * 4);
+    pub fn single(dir: Direction) -> Self {
+        Self(DirectionSet::single(dir))
+    }
+}
 
-            let new_endpoint_iter =
-                std::mem::take(&mut endpoints)
-                    .into_iter()
-                    .flat_map(|(loc, dirs)| {
-                        self.surrounding_valid_with_dirs(loc.pos, height, dirs).map(
-                            move |(next_point, dirs)| {
-                                (
-                                    ValuedLoc {
-                                        pos: next_point,
-                                        count: loc.count,
-                                    },
-                                    dirs,
-                                )
-                            },
-                        )
-                    });
+impl Add<Direction> for SafeDirectionSet {
+    type Output = Self;
 
-            for endpoint in new_endpoint_iter {
-                new_endpoints.binary_search_by_key(&endpoint.0.pos, |x| x.0.pos);
-            }
+    fn add(self, rhs: Direction) -> Self::Output {
+        Self(self.0.add(rhs))
+    }
+}
 
-            endpoints = new_endpoints;
-        }
-        todo!()
+impl Add for SafeDirectionSet {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0.add(rhs.0))
     }
 }
