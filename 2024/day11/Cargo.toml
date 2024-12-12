@@ -2,6 +2,54 @@
 name = "day11"
 version = "0.1.0"
 edition = "2021"
+default-run = "main"
+
+[[bin]]
+name = "main"
+
+[[bin]]
+name = "vec_reuse"
+
+[[bin]]
+name = "vec_combined_remerge"
+
+[[bin]]
+name = "special_case"
+
+[[bin]]
+name = "cache_condition"
+
+[[bin]]
+name = "math_trickery"
+
+[[bin]]
+name = "space_savings"
+
+[[bin]]
+name = "skip_last_sort"
+
+[[bin]]
+name = "space_savings_skip_last_sort"
+
+[[bin]]
+name = "cache_logs"
+
+[[bin]]
+name = "full_cache"
+
+[[bin]]
+name = "comp_cache_only"
+
+[[bin]]
+name = "keep_working_vec"
+
+[profile.full-perf]
+inherits = "release"
+strip = true # Remove symbol data from a release
+lto = true
+overflow-checks = false
+panic = "abort"
+codegen-units = 1 # Reduce processing speed, but squeeze optimization
 
 [dependencies]
 advent-rust-lib = { path = "../../rust-lib" }

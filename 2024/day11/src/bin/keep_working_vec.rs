@@ -10,11 +10,15 @@ fn main() {
 }
 
 fn part_1(mut stones: StoneCollection, num_iter: u64) {
-    for _ in 0..num_iter {
+    for _ in 0..(num_iter.saturating_sub(1)) {
         stones.step();
     }
 
-    println!("{}", stones.len());
+    if num_iter > 0 {
+        println!("{}", stones.final_step());
+    } else {
+        println!("{}", stones.len());
+    }
 }
 
 // -------------------------------------------------- //
@@ -43,6 +47,7 @@ impl Stone {
 #[derive(Debug, Clone)]
 pub struct StoneCollection {
     arr: Vec<Stone>,
+    working_arr: Vec<Stone>,
 }
 
 impl StoneCollection {
@@ -55,10 +60,13 @@ impl StoneCollection {
             .map(str::parse)
             .collect::<Result<Vec<u64>, _>>()?
             .into_iter()
-            .map(|num| Stone::new(num))
+            .map(Stone::new)
             .collect();
 
-        let mut this = Self { arr };
+        let mut this = Self {
+            arr,
+            working_arr: Vec::new(),
+        };
         this.condense();
         Ok(this)
     }
@@ -104,43 +112,74 @@ impl StoneCollection {
     /// Return (upper half of digits, lower half of digits)
     ///
     /// Uses base 10 for digits.
-    fn split_digits_in_half(val: u64) -> (u64, u64) {
-        let half = (val.ilog10() + 1) / 2;
-        let divisor = 10_u64.pow(half);
+    fn split_digits_at(val: u64, split_point: u32) -> (u64, u64) {
+        let divisor = 10_u64.pow(split_point);
 
         (val / divisor, val % divisor)
     }
 
     pub fn step(&mut self) {
-        let mut new_arr: Vec<Stone> = Vec::with_capacity(self.arr.len() * 2);
-
-        let insert_new = |stone: Stone, target_arr: &mut Vec<Stone>| match target_arr
-            .binary_search_by_key(&stone.value, |x| x.value)
-        {
-            Ok(idx) => target_arr[idx].merge(stone),
-            Err(idx) => target_arr.insert(idx, stone),
+        let start_idx = {
+            if let Some(first_stone) = self.arr.first_mut() {
+                if first_stone.value == 0 {
+                    first_stone.value = 1;
+                    1
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
         };
 
-        for mut stone in std::mem::take(&mut self.arr) {
-            if stone.value == 0 {
-                stone.value = 1;
-            } else if (Self::num_digits(stone.value) % 2) == 0 {
+        for stone in self.arr[start_idx..].iter_mut() {
+            let num_digits = Self::num_digits(stone.value);
+            if (num_digits % 2) == 0 {
                 // Copy out to another stone
-                let mut other_stone = stone;
+                let mut other_stone = *stone;
 
                 // Split the value in half
-                (stone.value, other_stone.value) = Self::split_digits_in_half(stone.value);
+                (stone.value, other_stone.value) =
+                    Self::split_digits_at(stone.value, num_digits / 2);
 
-                // Insert the new stone
-                insert_new(other_stone, &mut new_arr);
+                // Store the new stone for later insert
+                self.working_arr.push(other_stone);
             } else {
                 stone.value *= 2024;
             }
-
-            insert_new(stone, &mut new_arr);
         }
 
-        // Complete the shift
-        self.arr = new_arr;
+        // Push in new elements and remove dups
+        self.arr.append(&mut self.working_arr);
+        self.condense();
+    }
+
+    /// Return length after applying a final step.
+    pub fn final_step(&self) -> u64 {
+        let mut sum = 0;
+
+        let start_idx = {
+            if let Some(first_stone) = self.arr.first() {
+                if first_stone.value == 0 {
+                    sum += first_stone.count;
+                    1
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        };
+
+        for stone in &self.arr[start_idx..] {
+            let num_digits = Self::num_digits(stone.value);
+            if (num_digits % 2) == 0 {
+                sum += stone.count * 2;
+            } else {
+                sum += stone.count;
+            }
+        }
+
+        sum
     }
 }
