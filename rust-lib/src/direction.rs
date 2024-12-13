@@ -1,4 +1,4 @@
-use std::ops::Add;
+use std::{fmt::Display, ops::Add};
 
 use crate::grid::Pos2D;
 
@@ -8,6 +8,17 @@ pub enum Direction {
     Down,
     Left,
     Right,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Up => write!(f, "Up"),
+            Self::Down => write!(f, "Down"),
+            Self::Left => write!(f, "Left"),
+            Self::Right => write!(f, "Right"),
+        }
+    }
 }
 
 impl Direction {

@@ -1,4 +1,10 @@
-use std::ops::{Add, Sub};
+use std::{
+    cmp::Ordering,
+    fmt::Display,
+    ops::{Add, Sub},
+};
+
+use thiserror::Error;
 
 use crate::signed::SignedUsize;
 
@@ -9,8 +15,14 @@ pub struct Pos2D {
     pub y: usize,
 }
 
+impl Display for Pos2D {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
 impl Pos2D {
-    pub fn new(x: usize, y: usize) -> Self {
+    pub const fn new(x: usize, y: usize) -> Self {
         Self { x, y }
     }
 
@@ -91,6 +103,20 @@ impl Pos2D {
         A: AsRef<[S]>,
     {
         arr.as_ref().get(self.y)?.as_ref().chars().nth(self.x)
+    }
+
+    // All edges, ordered by highest and then by leftmost
+    //
+    // e.g. (0 0), (0 1), (1 0), (1 1)
+    pub fn order_top_left(lhs: &Self, rhs: &Self) -> Ordering {
+        lhs.y.cmp(&rhs.y).then(lhs.x.cmp(&rhs.x))
+    }
+
+    // All edges, ordered by leftmost and then by highest
+    //
+    // e.g. (0 0), (1 0), (0 1), (1 1)
+    pub fn order_left_top(lhs: &Self, rhs: &Self) -> Ordering {
+        lhs.x.cmp(&rhs.x).then(lhs.y.cmp(&rhs.y))
     }
 }
 
@@ -221,5 +247,217 @@ impl Iterator for SurroundingLineIter {
     fn next(&mut self) -> Option<Self::Item> {
         self.cur_pos = (self.change)(&self.cur_pos)?;
         Some(self.cur_pos)
+    }
+}
+
+// -------------------------------------------------- //
+
+#[derive(Debug, Clone)]
+/// Rectangle grid with a flat inner representation.
+pub struct RectangleGrid<T> {
+    inner: Box<[T]>,
+    x_max: usize,
+    y_max: usize,
+}
+
+#[derive(Debug, Error)]
+#[error("At least one line of the iterator was a different length.")]
+pub struct NonRectangleInput;
+
+impl<T> RectangleGrid<T> {
+    /// Attempt to construct this from a 2D iterator.
+    ///
+    /// May fail when the iterator is non-square, but is not guaranteed to.
+    pub fn try_from_iter<I, C>(iter: I) -> Result<Self, NonRectangleInput>
+    where
+        I: IntoIterator<Item = C>,
+        C: IntoIterator<Item = T>,
+    {
+        let mut iter = iter.into_iter();
+
+        let mut y_max = 0;
+        let mut x_max = 0;
+        let mut inner = Vec::new();
+
+        if let Some(first) = iter.next() {
+            inner = first.into_iter().collect();
+            x_max = inner.len();
+
+            inner.extend(iter.flat_map(|x| x.into_iter()));
+
+            if (inner.len() % x_max) != 0 {
+                return Err(NonRectangleInput);
+            }
+
+            y_max = inner.len() / x_max;
+        }
+
+        Ok(Self {
+            inner: inner.into_boxed_slice(),
+            x_max,
+            y_max,
+        })
+    }
+
+    /// Attempt to construct this from a 2D iterator.
+    ///
+    /// Will fail when iterator is non-square.
+    pub fn try_from_iter_strict<I, C>(iter: I) -> Result<Self, NonRectangleInput>
+    where
+        I: IntoIterator<Item = C>,
+        C: IntoIterator<Item = T>,
+    {
+        let mut iter = iter.into_iter();
+
+        let mut y_max = 0;
+        let mut x_max = 0;
+        let mut inner = Vec::new();
+
+        if let Some(first) = iter.next() {
+            inner = first.into_iter().collect();
+            x_max = inner.len();
+
+            for x in iter {
+                let mut x: Vec<_> = x.into_iter().collect();
+                if x.len() != x_max {
+                    return Err(NonRectangleInput);
+                }
+                inner.append(&mut x);
+            }
+
+            y_max = inner.len() / x_max;
+        }
+
+        Ok(Self {
+            inner: inner.into_boxed_slice(),
+            x_max,
+            y_max,
+        })
+    }
+}
+
+impl<T> RectangleGrid<T> {
+    pub fn x_max(&self) -> usize {
+        self.x_max
+    }
+
+    pub fn y_max(&self) -> usize {
+        self.y_max
+    }
+
+    /// Returns true if `pos` is within this grid's dimensions.
+    pub fn in_grid(&self, pos: Pos2D) -> bool {
+        (pos.y < self.y_max) && (pos.x < self.x_max)
+    }
+
+    /// Flatten the pose to an internal index.
+    ///
+    /// Invalid if pos in not in this map.
+    fn flat_pos(&self, pos: Pos2D) -> usize {
+        (pos.y * self.x_max) + pos.x
+    }
+
+    pub fn get(&self, pos: Pos2D) -> Option<&T> {
+        self.in_grid(pos).then(|| &self.inner[self.flat_pos(pos)])
+    }
+
+    pub fn get_mut(&mut self, pos: Pos2D) -> Option<&mut T> {
+        self.in_grid(pos)
+            .then(|| &mut self.inner[self.flat_pos(pos)])
+    }
+
+    pub fn lines(&self) -> impl Iterator<Item = &[T]> {
+        self.inner.chunks(self.x_max)
+    }
+
+    pub fn lines_mut(&mut self) -> impl Iterator<Item = &mut [T]> {
+        self.inner.chunks_mut(self.x_max)
+    }
+
+    pub fn items(&self) -> impl Iterator<Item = &T> {
+        self.inner.iter()
+    }
+
+    pub fn items_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.inner.iter_mut()
+    }
+
+    /// All positions, starting at top left and moving right before down.
+    ///
+    /// Output order in 1x1: (0 0), (0 1), (1 0), (1 1)
+    pub fn positions(&self) -> impl Iterator<Item = Pos2D> + use<'_, T> {
+        (0..self.y_max).flat_map(|y| (0..self.x_max).map(move |x| Pos2D::new(x, y)))
+    }
+}
+
+impl<T: Copy> RectangleGrid<T> {
+    pub fn at(&self, pos: Pos2D) -> Option<T> {
+        self.in_grid(pos).then_some(self.inner[self.flat_pos(pos)])
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// Immutable entry in the grid, keeping position data.
+pub struct GridEntry<'a, T> {
+    position: Pos2D,
+    pub value: &'a T,
+}
+
+impl<T> GridEntry<'_, T> {
+    pub fn position(&self) -> Pos2D {
+        self.position
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+/// Mutable entry in the grid, keeping position data.
+pub struct GridEntryMut<'a, T> {
+    position: Pos2D,
+    pub value: &'a mut T,
+}
+
+impl<T> GridEntryMut<'_, T> {
+    pub fn position(&self) -> Pos2D {
+        self.position
+    }
+}
+
+impl<T> RectangleGrid<T> {
+    /// Produces each item with its position.
+    pub fn positioned_items(&self) -> impl Iterator<Item = GridEntry<'_, T>> {
+        self.positions()
+            .zip(self.items())
+            .map(|(position, value)| GridEntry { position, value })
+    }
+
+    /// Produces each mutable item with its position.
+    pub fn positioned_items_mut(&mut self) -> impl Iterator<Item = GridEntryMut<'_, T>> {
+        (0..self.y_max)
+            .flat_map(|y| (0..self.x_max).map(move |x| Pos2D::new(x, y)))
+            .zip(self.inner.iter_mut())
+            .map(|(position, value)| GridEntryMut { position, value })
+    }
+}
+
+impl<T: Clone> RectangleGrid<T> {
+    // Evenly the outside with a given value
+    pub fn pad_surrounding(&self, value: T) -> Self {
+        let horizontal_pad = std::iter::repeat_n(value.clone(), self.x_max + 1);
+        let vertical_pad = self.lines().flat_map(|line| {
+            std::iter::once(value.clone())
+                .chain(line.iter().cloned())
+                .chain(std::iter::once(value.clone()))
+        });
+
+        let new_arr = horizontal_pad
+            .clone()
+            .chain(vertical_pad)
+            .chain(horizontal_pad)
+            .collect();
+        Self {
+            inner: new_arr,
+            x_max: self.x_max + 1,
+            y_max: self.y_max + 1,
+        }
     }
 }
