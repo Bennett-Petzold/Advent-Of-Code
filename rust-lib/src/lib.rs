@@ -2,5 +2,6 @@
 
 pub mod direction;
 pub mod grid;
+pub mod iter;
 pub mod read;
 pub mod signed;

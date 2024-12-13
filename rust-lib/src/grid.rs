@@ -6,7 +6,10 @@ use std::{
 
 use thiserror::Error;
 
-use crate::signed::SignedUsize;
+use crate::{
+    iter::{ArrayIter, ToExactIter},
+    signed::SignedUsize,
+};
 
 /// Position in a 2D grid
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -62,7 +65,7 @@ impl Pos2D {
 
     // -- END Directional calculations -- //
 
-    pub fn surrounding_pos(&self) -> impl Iterator<Item = Self> {
+    pub fn surrounding_pos(&self) -> impl DoubleEndedIterator<Item = Self> {
         [
             Some(Self::new(self.x + 1, self.y)),
             Some(Self::new(self.x + 1, self.y + 1)),
@@ -82,7 +85,7 @@ impl Pos2D {
         .flatten()
     }
 
-    pub fn surrounding_lines(&self) -> impl Iterator<Item = SurroundingLineIter> + use<'_> {
+    pub fn surrounding_lines(&self) -> impl ArrayIter<SurroundingLineIter> + use<'_> {
         [
             Self::down,
             Self::down_right,
@@ -95,6 +98,13 @@ impl Pos2D {
         ]
         .into_iter()
         .map(|func| SurroundingLineIter::new(*self, func))
+    }
+
+    pub fn repeated_step<F>(&self, step: F) -> StepIter<F>
+    where
+        F: FnMut(Pos2D) -> Option<Pos2D>,
+    {
+        StepIter::new(*self, step)
     }
 
     pub fn get_arr_char<S, A>(&self, arr: A) -> Option<char>
@@ -250,6 +260,33 @@ impl Iterator for SurroundingLineIter {
     }
 }
 
+#[derive(Debug)]
+pub struct StepIter<F> {
+    cur_pos: Pos2D,
+    change: F,
+}
+
+impl<F> StepIter<F> {
+    pub fn new(pos: Pos2D, change: F) -> Self {
+        Self {
+            cur_pos: pos,
+            change,
+        }
+    }
+}
+
+impl<F> Iterator for StepIter<F>
+where
+    F: FnMut(Pos2D) -> Option<Pos2D>,
+{
+    type Item = Pos2D;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.cur_pos = (self.change)(self.cur_pos)?;
+        Some(self.cur_pos)
+    }
+}
+
 // -------------------------------------------------- //
 
 #[derive(Debug, Clone)]
@@ -366,27 +403,30 @@ impl<T> RectangleGrid<T> {
             .then(|| &mut self.inner[self.flat_pos(pos)])
     }
 
-    pub fn lines(&self) -> impl Iterator<Item = &[T]> {
+    pub fn lines(&self) -> impl ArrayIter<&[T]> {
         self.inner.chunks(self.x_max)
     }
 
-    pub fn lines_mut(&mut self) -> impl Iterator<Item = &mut [T]> {
+    pub fn lines_mut(&mut self) -> impl ArrayIter<&mut [T]> {
         self.inner.chunks_mut(self.x_max)
     }
 
-    pub fn items(&self) -> impl Iterator<Item = &T> {
+    pub fn items(&self) -> impl ArrayIter<&T> {
         self.inner.iter()
     }
 
-    pub fn items_mut(&mut self) -> impl Iterator<Item = &mut T> {
+    pub fn items_mut(&mut self) -> impl ArrayIter<&mut T> {
         self.inner.iter_mut()
     }
 
     /// All positions, starting at top left and moving right before down.
     ///
     /// Output order in 1x1: (0 0), (0 1), (1 0), (1 1)
-    pub fn positions(&self) -> impl Iterator<Item = Pos2D> + use<'_, T> {
-        (0..self.y_max).flat_map(|y| (0..self.x_max).map(move |x| Pos2D::new(x, y)))
+    pub fn positions(&self) -> impl ArrayIter<Pos2D> + use<'_, T> {
+        ToExactIter::new(
+            (0..self.y_max).flat_map(|y| (0..self.x_max).map(move |x| Pos2D::new(x, y))),
+            self.y_max * self.x_max,
+        )
     }
 }
 
@@ -424,18 +464,21 @@ impl<T> GridEntryMut<'_, T> {
 
 impl<T> RectangleGrid<T> {
     /// Produces each item with its position.
-    pub fn positioned_items(&self) -> impl Iterator<Item = GridEntry<'_, T>> {
+    pub fn positioned_items(&self) -> impl ArrayIter<GridEntry<'_, T>> {
         self.positions()
             .zip(self.items())
             .map(|(position, value)| GridEntry { position, value })
     }
 
     /// Produces each mutable item with its position.
-    pub fn positioned_items_mut(&mut self) -> impl Iterator<Item = GridEntryMut<'_, T>> {
-        (0..self.y_max)
-            .flat_map(|y| (0..self.x_max).map(move |x| Pos2D::new(x, y)))
-            .zip(self.inner.iter_mut())
-            .map(|(position, value)| GridEntryMut { position, value })
+    pub fn positioned_items_mut(&mut self) -> impl ExactSizeIterator<Item = GridEntryMut<'_, T>> {
+        ToExactIter::new(
+            (0..self.y_max)
+                .flat_map(|y| (0..self.x_max).map(move |x| Pos2D::new(x, y)))
+                .zip(self.inner.iter_mut())
+                .map(|(position, value)| GridEntryMut { position, value }),
+            self.y_max * self.x_max,
+        )
     }
 }
 

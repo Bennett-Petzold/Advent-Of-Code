@@ -87,6 +87,18 @@ impl Iterator for DirectionSet {
     }
 }
 
+impl ExactSizeIterator for DirectionSet {
+    fn len(&self) -> usize {
+        match self {
+            Self::Empty => 0,
+            Self::One(_) => 1,
+            Self::Two(_) => 2,
+            Self::Three(_) => 3,
+            Self::Four => 4,
+        }
+    }
+}
+
 impl DirectionSet {
     pub fn reverse(self) -> Self {
         match self {
@@ -154,6 +166,12 @@ impl Iterator for SafeDirectionSet {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
+    }
+}
+
+impl ExactSizeIterator for SafeDirectionSet {
+    fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
