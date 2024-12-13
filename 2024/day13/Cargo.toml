@@ -1,0 +1,10 @@
+[package]
+name = "day13"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+advent-rust-lib = { path = "../../rust-lib" }
+num = "0.4.3"
+regex = "1.11.1"
+thiserror = "2.0.6"
