@@ -5,5 +5,6 @@ edition = "2021"
 
 [dependencies]
 advent-rust-lib = { path = "../../rust-lib" }
+image = "0.25.5"
 regex = "1.11.1"
 thiserror = "2.0.7"

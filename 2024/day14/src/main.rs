@@ -1,6 +1,16 @@
-use std::{cmp::Ordering, num::ParseIntError, sync::LazyLock};
+use std::{
+    cmp::Ordering,
+    collections::HashSet,
+    fs::{create_dir_all, File},
+    hash::Hash,
+    io::{BufWriter, Seek, Write},
+    num::ParseIntError,
+    sync::LazyLock,
+    usize,
+};
 
 use advent_rust_lib::read::input;
+use image::{GenericImage, ImageBuffer, Rgb};
 use regex::Regex;
 use thiserror::Error;
 
@@ -19,6 +29,7 @@ fn main() {
         .unwrap();
 
     part_1(&robots, width, height);
+    part_2(&robots, width, height);
 }
 
 fn part_1(robots: &[Robot], width: i64, height: i64) {
@@ -46,6 +57,47 @@ fn part_1(robots: &[Robot], width: i64, height: i64) {
         });
 
     println!("{}", quad_sums.iter().product::<i64>());
+}
+
+fn part_2(robots: &[Robot], width: i64, height: i64) {
+    let mut maps = HashSet::new();
+
+    for num_steps in 0..i64::MAX {
+        let new_map: Vec<_> = robots
+            .iter()
+            .map(|robot| robot.step(num_steps, width, height))
+            .map(|(x, y)| (x as u64, y as u64))
+            .collect();
+
+        create_dir_all("part_2").unwrap();
+        let writer = BufWriter::new(
+            File::create("part_2/".to_string() + &num_steps.to_string() + ".jpeg").unwrap(),
+        );
+        print_map(writer, &new_map);
+
+        let insert_status = maps.insert(new_map);
+
+        if !insert_status {
+            println!("Num steps: {num_steps}");
+            break;
+        }
+    }
+}
+
+fn print_map<W: Write + Seek>(mut writer: W, coordinates: &[(u64, u64)]) {
+    if let Some(height) = coordinates.iter().map(|(_, y)| y).max() {
+        if let Some(width) = coordinates.iter().map(|(x, _)| x).max() {
+            let mut imgbuf: ImageBuffer<Rgb<u8>, _> =
+                ImageBuffer::new(*width as u32 + 1, *height as u32 + 1);
+
+            for (x, y) in coordinates {
+                imgbuf.put_pixel(*x as u32, *y as u32, image::Rgb([255, 255, 255]));
+            }
+            imgbuf
+                .write_to(&mut writer, image::ImageFormat::Jpeg)
+                .unwrap();
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
