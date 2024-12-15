@@ -6,7 +6,7 @@ use std::{
 
 use num::{CheckedAdd, CheckedSub, Integer, Signed};
 
-use crate::grid::Pos2D;
+use crate::{grid::Pos2D, iter::ArrayIter};
 
 /// Position in a 2D grid
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -104,8 +104,7 @@ where
         .flatten()
     }
 
-    /*
-    pub fn surrounding_lines(&self) -> impl ArrayIter<SurroundingLineIter> + use<'_> {
+    pub fn surrounding_lines(&self) -> impl ArrayIter<SurroundingLineIter<N>> + use<'_, N> {
         [
             Self::down,
             Self::down_right,
@@ -120,13 +119,12 @@ where
         .map(|func| SurroundingLineIter::new(*self, func))
     }
 
-    pub fn repeated_step<F>(&self, step: F) -> StepIter<F>
+    pub fn repeated_step<F>(&self, step: F) -> StepIter<F, N>
     where
         F: FnMut(Self) -> Option<Self>,
     {
         StepIter::new(*self, step)
     }
-    */
 
     pub fn get_arr_char<S, A>(&self, arr: A) -> Option<char>
     where
@@ -209,7 +207,7 @@ impl<N> Pos2DExt<N>
 where
     N: Signed + Copy,
 {
-    // Returns a position flipped around `center_point`.
+    /// Returns a position flipped around `center_point`.
     pub fn flip(mut self, center_point: Self) -> Option<Self> {
         let x_diff = self.x - center_point.x;
         let y_diff = self.y - center_point.y;
@@ -251,7 +249,7 @@ where
         Some(self)
     }
 
-    // Returns a position rotated 90 degrees `num_rotations` times around `center_point`.
+    /// Returns a position rotated 90 degrees `num_rotations` times around `center_point`.
     pub fn rotate_clockwise_90(self, center_point: Self, num_rotations: u8) -> Option<Self> {
         match num_rotations % 4 {
             0 => Some(self),
@@ -266,7 +264,7 @@ where
         }
     }
 
-    // Returns all 90 degree rotations in order of 0, 90, 180, and 270.
+    /// Returns all 90 degree rotations in order of 0, 90, 180, and 270.
     pub fn all_90_clockwise_rotations(self, center_point: Self) -> [Option<Self>; 4] {
         [
             Some(self),
