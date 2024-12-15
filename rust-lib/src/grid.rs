@@ -1,6 +1,7 @@
 use std::{
     cmp::Ordering,
     fmt::Display,
+    io::Write,
     ops::{Add, Sub},
 };
 
@@ -436,6 +437,15 @@ impl<T: Copy> RectangleGrid<T> {
     }
 }
 
+impl<T> IntoIterator for RectangleGrid<T> {
+    type Item = T;
+    type IntoIter = <Box<[T]> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        <Box<[T]> as IntoIterator>::into_iter(self.inner)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 /// Immutable entry in the grid, keeping position data.
 pub struct GridEntry<'a, T> {
@@ -502,5 +512,23 @@ impl<T: Clone> RectangleGrid<T> {
             x_max: self.x_max + 1,
             y_max: self.y_max + 1,
         }
+    }
+}
+
+impl<T> RectangleGrid<T> {
+    /// Formats the grid's items with some function `to_str` into `sink`.
+    pub fn print<W, F>(&self, sink: &mut W, mut to_str: F) -> Result<(), std::io::Error>
+    where
+        W: Write,
+        F: FnMut(&T) -> &str,
+    {
+        for line in self.lines() {
+            for item in line {
+                write!(sink, "{}", (to_str)(item))?;
+            }
+            writeln!(sink)?;
+        }
+
+        Ok(())
     }
 }
