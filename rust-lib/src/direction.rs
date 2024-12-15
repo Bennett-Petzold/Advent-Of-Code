@@ -112,7 +112,7 @@ impl DirectionSet {
             DirectionSet::Two([x, y]) => DirectionSet::Two([x.reverse(), y.reverse()]),
             DirectionSet::Three(vals) => DirectionSet::One([Direction::all()
                 .into_iter()
-                .find(|dir| vals.contains(&dir))
+                .find(|dir| vals.contains(dir))
                 .expect("There is always one remaining direction")]),
             DirectionSet::Four => DirectionSet::Empty,
         }

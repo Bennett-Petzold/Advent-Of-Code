@@ -8,3 +8,7 @@ pub mod signed;
 
 #[cfg(feature = "num")]
 pub mod gcd;
+#[cfg(feature = "num")]
+pub mod grid_ext;
+#[cfg(feature = "num")]
+pub mod signed_ext;
