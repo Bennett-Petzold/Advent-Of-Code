@@ -2,7 +2,7 @@ use std::{fmt::Display, ops::Add};
 
 use crate::grid::Pos2D;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Direction {
     Up,
     Down,
@@ -33,6 +33,19 @@ impl Direction {
             Self::Left => Self::Right,
             Self::Right => Self::Left,
         }
+    }
+
+    pub fn clockwise(self) -> Self {
+        match self {
+            Self::Up => Self::Right,
+            Self::Right => Self::Down,
+            Self::Down => Self::Left,
+            Self::Left => Self::Up,
+        }
+    }
+
+    pub fn counter_clockwise(self) -> Self {
+        self.clockwise().reverse()
     }
 }
 
