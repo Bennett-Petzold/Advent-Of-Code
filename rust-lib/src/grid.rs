@@ -372,6 +372,20 @@ impl<T> RectangleGrid<T> {
             y_max,
         })
     }
+
+    /// Attempt to construct this from a 2D iterator.
+    ///
+    /// May fail when the iterator is non-square, but is not guaranteed to.
+    pub fn default_with_dim(x_max: usize, y_max: usize, default: T) -> Self
+    where
+        T: Clone,
+    {
+        Self {
+            inner: vec![default; x_max * y_max].into_boxed_slice(),
+            x_max,
+            y_max,
+        }
+    }
 }
 
 impl<T> RectangleGrid<T> {
