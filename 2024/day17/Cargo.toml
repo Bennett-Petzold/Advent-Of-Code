@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 advent-rust-lib = { path = "../../rust-lib" }
 enum_primitive = "0.1.1"
-z3 = { version = "0.12.1", features = ["static-link-z3"] }
+rayon = "1.10.0"
+z3 = { version = "0.12.1" }

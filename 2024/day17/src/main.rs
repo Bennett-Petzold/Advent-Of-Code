@@ -4,7 +4,7 @@ use advent_rust_lib::read::input;
 use enum_primitive::{enum_from_primitive, FromPrimitive};
 use z3::{ast::BV, SatResult};
 
-use z3::ast::{Ast, Int as z3Int};
+use z3::ast::Ast;
 
 #[macro_use]
 extern crate enum_primitive;
@@ -30,7 +30,6 @@ fn part_1(mut computer: Computer) {
 fn part_2(computer: Computer) {
     let mut solves = vec![ComputerSolve::from_known(computer)];
 
-    let mut idx = 0;
     loop {
         solves = solves
             .into_iter()
@@ -43,18 +42,12 @@ fn part_2(computer: Computer) {
         if let Some(resolved) = solves
             .iter()
             .filter(|solve| solve.is_finished() && solve.produced_all_outputs())
-            .inspect(|_| println!("CONDITION MET"))
             .filter_map(|solve| solve.solution())
             .next()
         {
             println!("{resolved}");
             break;
         } else {
-            idx += 1;
-            if idx % 10 == 0 {
-                println!("Idx: {idx}");
-                println!("Solves len: {}", solves.len());
-            }
             debug_assert!(!solves.is_empty());
         }
     }
@@ -118,8 +111,7 @@ impl Computer {
                     self.registers[(arg - 4) as usize]
                 };
 
-                let pow_2 = 1 << arg;
-                self.registers[0] /= pow_2;
+                self.registers[0] >>= arg;
                 self.pc += 2;
             }
             Instruction::Bxl => {
@@ -219,28 +211,35 @@ pub struct ComputerSolve {
     // A, B, C
     cfg: ManuallyDrop<Rc<z3::Config>>,
     ctx: &'static Rc<z3::Context>,
-    consts: ManuallyDrop<[z3Int<'static>; 8]>,
-    eight: ManuallyDrop<z3Int<'static>>,
-    reg_a: ManuallyDrop<z3Int<'static>>,
-    registers: ManuallyDrop<[z3Int<'static>; 3]>,
+    consts: ManuallyDrop<[BV<'static>; 8]>,
+    eight_mod_mask: ManuallyDrop<BV<'static>>,
+    reg_a: ManuallyDrop<BV<'static>>,
+    registers: ManuallyDrop<[BV<'static>; 3]>,
     pub program: Rc<[u8]>,
     pc: usize,
-    solver: ManuallyDrop<z3::Solver<'static>>,
+    solver: ManuallyDrop<z3::Optimize<'static>>,
     next_program_output: usize,
 }
 
+const BV_WIDTH: u32 = 64;
+
 impl Clone for ComputerSolve {
     fn clone(&self) -> Self {
+        let ctx = Box::leak(Box::new(self.ctx.clone()));
+
+        let solver = z3::Optimize::new(self.ctx);
+        solver.from_string(self.solver.to_string());
+
         Self {
             cfg: self.cfg.clone(),
-            ctx: Box::leak(Box::new(self.ctx.clone())),
+            ctx,
             consts: self.consts.clone(),
-            eight: self.eight.clone(),
+            eight_mod_mask: self.eight_mod_mask.clone(),
             reg_a: self.reg_a.clone(),
             registers: self.registers.clone(),
             program: self.program.clone(),
             pc: self.pc,
-            solver: self.solver.clone(),
+            solver: ManuallyDrop::new(solver),
             next_program_output: self.next_program_output,
         }
     }
@@ -252,18 +251,21 @@ impl ComputerSolve {
         // Need a static lifetime for borrow
         let ctx = Box::leak(Box::new(Rc::new(z3::Context::new(&cfg))));
 
-        let reg_a = z3Int::new_const(ctx, "A");
-        let reg_b = z3Int::from_u64(ctx, computer.registers[1]);
-        let reg_c = z3Int::from_u64(ctx, computer.registers[2]);
+        let reg_a = BV::new_const(ctx, "A", BV_WIDTH);
+        let reg_b = BV::from_u64(ctx, computer.registers[1], BV_WIDTH);
+        let reg_c = BV::from_u64(ctx, computer.registers[2], BV_WIDTH);
 
-        let solver = z3::Solver::new(ctx);
+        let solver = z3::Optimize::new(ctx);
+        solver.minimize(&reg_a);
 
         Self {
             cfg: ManuallyDrop::new(cfg),
             ctx,
             reg_a: ManuallyDrop::new(reg_a.clone()),
-            consts: ManuallyDrop::new(std::array::from_fn(|idx| z3Int::from_u64(ctx, idx as u64))),
-            eight: ManuallyDrop::new(z3Int::from_u64(ctx, 8)),
+            consts: ManuallyDrop::new(std::array::from_fn(|idx| {
+                BV::from_u64(ctx, idx as u64, BV_WIDTH)
+            })),
+            eight_mod_mask: ManuallyDrop::new(BV::new_const(ctx, "111", BV_WIDTH)),
             registers: ManuallyDrop::new([reg_a, reg_b, reg_c]),
             program: computer.program.into(),
             pc: 0,
@@ -273,8 +275,6 @@ impl ComputerSolve {
     }
 
     pub fn exec_one(mut self) -> [Option<Self>; 2] {
-        const BV_WIDTH: u32 = 64;
-
         let arg = self.program[self.pc + 1];
         match Instruction::from_u8(self.program[self.pc]).expect("All opcodes [0, 7] are valid") {
             Instruction::Adv => {
@@ -284,14 +284,11 @@ impl ComputerSolve {
                     &self.registers[(arg - 4) as usize]
                 };
 
-                let two = &self.consts[2];
-                self.registers[0] = self.registers[0].div(&z3Int::from_real(&two.power(arg)));
+                self.registers[0] = self.registers[0].bvlshr(arg);
                 self.pc += 2;
             }
             Instruction::Bxl => {
-                let b_bv = BV::from_int(&self.registers[1], BV_WIDTH);
-                let arg_bv = BV::from_int(&self.consts[arg as usize], BV_WIDTH);
-                self.registers[1] = z3Int::from_bv(&b_bv.bvxor(&arg_bv), false);
+                self.registers[1] = self.registers[1].bvxor(&self.consts[arg as usize]);
                 self.pc += 2;
             }
             Instruction::Bst => {
@@ -301,7 +298,7 @@ impl ComputerSolve {
                     &self.registers[(arg - 4) as usize]
                 };
 
-                self.registers[1] = arg.modulo(&self.eight);
+                self.registers[1] = arg.bvand(&self.eight_mod_mask);
                 self.pc += 2;
             }
             Instruction::Jnz => {
@@ -319,9 +316,7 @@ impl ComputerSolve {
                 return [Some(self), Some(jump_version)];
             }
             Instruction::Bxc => {
-                let b_bv = BV::from_int(&self.registers[1], BV_WIDTH);
-                let c_bv = BV::from_int(&self.registers[2], BV_WIDTH);
-                self.registers[1] = z3Int::from_bv(&b_bv.bvxor(&c_bv), false);
+                self.registers[1] = self.registers[1].bvxor(&self.registers[2]);
                 self.pc += 2;
             }
             Instruction::Out => {
@@ -332,10 +327,12 @@ impl ComputerSolve {
                 };
 
                 if let Some(next_out) = self.program.get(self.next_program_output) {
-                    self.solver.assert(
-                        &arg.modulo(&self.eight)
-                            ._eq(&z3Int::from_u64(self.ctx, *next_out as u64)),
-                    );
+                    self.solver
+                        .assert(&arg.bvand(&self.eight_mod_mask)._eq(&BV::from_u64(
+                            self.ctx,
+                            *next_out as u64,
+                            BV_WIDTH,
+                        )));
 
                     self.next_program_output += 1;
                     self.pc += 2;
@@ -350,8 +347,7 @@ impl ComputerSolve {
                     &self.registers[(arg - 4) as usize]
                 };
 
-                let two = &self.consts[2];
-                self.registers[1] = self.registers[0].div(&z3Int::from_real(&two.power(arg)));
+                self.registers[1] = self.registers[0].bvlshr(arg);
                 self.pc += 2;
             }
             Instruction::Cdv => {
@@ -361,8 +357,7 @@ impl ComputerSolve {
                     &self.registers[(arg - 4) as usize]
                 };
 
-                let two = &self.consts[2];
-                self.registers[2] = self.registers[0].div(&z3Int::from_real(&two.power(arg)));
+                self.registers[2] = self.registers[0].bvlshr(arg);
                 self.pc += 2;
             }
         }
@@ -371,7 +366,7 @@ impl ComputerSolve {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.solver.check() != SatResult::Unsat
+        self.solver.check(&[]) != SatResult::Unsat
     }
 
     pub fn is_finished(&self) -> bool {
@@ -383,7 +378,7 @@ impl ComputerSolve {
     }
 
     pub fn solution(&self) -> Option<u64> {
-        if self.solver.check() == SatResult::Sat {
+        if self.solver.check(&[]) == SatResult::Sat {
             self.solver
                 .get_model()
                 .and_then(|model| model.get_const_interp(&*self.reg_a))
@@ -400,7 +395,7 @@ impl Drop for ComputerSolve {
         unsafe {
             ManuallyDrop::drop(&mut self.cfg);
             ManuallyDrop::drop(&mut self.consts);
-            ManuallyDrop::drop(&mut self.eight);
+            ManuallyDrop::drop(&mut self.eight_mod_mask);
             ManuallyDrop::drop(&mut self.reg_a);
             ManuallyDrop::drop(&mut self.registers);
             ManuallyDrop::drop(&mut self.solver);
