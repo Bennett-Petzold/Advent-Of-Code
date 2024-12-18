@@ -16,6 +16,12 @@ name = "more_rc"
 [[bin]]
 name = "rayon"
 
+[[bin]]
+name = "simple_cmp"
+
+[[bin]]
+name = "ll"
+
 [dependencies]
 advent-rust-lib = { path = "../../rust-lib" }
 rayon = "1.10.0"
