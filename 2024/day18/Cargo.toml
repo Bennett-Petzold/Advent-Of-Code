@@ -2,6 +2,20 @@
 name = "day18"
 version = "0.1.0"
 edition = "2021"
+default-run = "main"
+
+[[bin]]
+name = "main"
+
+[[bin]]
+name = "rc"
+
+[[bin]]
+name = "more_rc"
+
+[[bin]]
+name = "rayon"
 
 [dependencies]
 advent-rust-lib = { path = "../../rust-lib" }
+rayon = "1.10.0"
