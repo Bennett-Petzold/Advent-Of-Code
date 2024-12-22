@@ -27,7 +27,8 @@ fn part_1(track: &Track, target_save: u64) {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct CostNode {
     cur_pos: Pos2D,
-    wall: Option<PointerSequence<u64>>,
+    wall_start: Option<Pos2D>,
+    wall_end: Option<Pos2D>,
 }
 
 #[derive(Debug)]
@@ -70,58 +71,59 @@ impl Track {
 
     pub fn num_valid_cheats(&self, target_save: u64) -> u64 {
         let mut visited = HashSet::new();
-        let mut cheating_visited = HashSet::new();
-        let mut next_cheating_visited = Vec::new();
         let mut to_visit = vec![CostNode {
             cur_pos: self.start,
-            wall: None,
+            wall_start: None,
+            wall_end: None,
         }];
 
-        let mut passing = Vec::new();
+        let mut passing = HashMap::new();
 
         for idx in 0..u64::MAX {
             println!("{idx}");
             for next_node in std::mem::take(&mut to_visit) {
                 if next_node.cur_pos == self.end {
-                    if let Some(wall) = next_node.wall {
-                        for x in 0..*PointerSequenceInternal::resolve(&wall) {
-                            passing.push(idx);
+                    if let Some(wall_start) = next_node.wall_start {
+                        if let Some(wall_end) = next_node.wall_end {
+                            println!("Add cost: {idx}");
+                            passing.entry((wall_start, wall_end)).or_insert(idx);
                         }
                     } else {
                         let max_cost = idx - target_save;
-                        println!("Passing: {:#?}", passing);
-                        return passing
-                            .into_iter()
-                            .take_while(|pass| *pass < max_cost)
-                            .count() as u64;
+                        println!("MAX COST: {max_cost}");
+                        let mut print_pass = passing
+                            .values()
+                            .filter(|pass| **pass <= max_cost)
+                            .map(|val| idx - val)
+                            .collect::<Vec<_>>();
+                        print_pass.sort();
+                        println!("Pass: {:#?}", print_pass);
+                        return passing.values().filter(|pass| **pass <= max_cost).count() as u64;
                     }
                 } else {
-                    if let Some(wall) = next_node.wall {
-                        next_cheating_visited.push((next_node.cur_pos, next_node.wall));
-                    } else {
-                        visited.insert(next_node.cur_pos);
-                    }
+                    visited.insert(next_node.clone());
 
                     let new_visits = Direction::all()
                         .into_iter()
                         .flat_map(|dir| next_node.cur_pos.step_dir(dir))
                         .flat_map(|new_pos| {
                             if let Some(is_wall) = self.grid.get(new_pos).copied() {
-                                if !(next_node.wall.is_some() && is_wall) {
-                                    let wall = if let Some(existing_wall) = next_node.wall {
-                                        Some(PointerSequenceInternal::point(existing_wall))
+                                if !(next_node.wall_start.is_some() && is_wall) {
+                                    let (wall_start, wall_end) = if let Some(existing_wall) =
+                                        &next_node.wall_start
+                                    {
+                                        (Some(*existing_wall), next_node.wall_end.or(Some(new_pos)))
                                     } else if is_wall {
-                                        Some(PointerSequenceInternal::new(1))
+                                        (Some(next_node.cur_pos), None)
                                     } else {
-                                        None
+                                        (None, None)
                                     };
                                     let new_node = CostNode {
                                         cur_pos: new_pos,
-                                        wall,
+                                        wall_start,
+                                        wall_end,
                                     };
-                                    if !visited.contains(&new_node.cur_pos)
-                                        && (!wall || !cheating_visited.contains(&new_node.cur_pos))
-                                    {
+                                    if !visited.contains(&new_node) {
                                         Some(new_node)
                                     } else {
                                         None
@@ -136,8 +138,6 @@ impl Track {
                     to_visit.extend(new_visits);
                 }
             }
-
-            cheating_visited.extend(next_cheating_visited.drain(..));
         }
 
         0
