@@ -23,12 +23,22 @@ fn part_1(track: &Track, target_save: u64) {
 }
 
 // -------------------------------------------------- //
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum EndPos {
+    CountOff(usize),
+    Resolved(RevLinkedNode),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct Walls {
+    start: Pos2D,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct CostNode {
     cur_pos: Pos2D,
-    wall_start: Option<Pos2D>,
-    wall_end: Option<Pos2D>,
+    // start, end
+    walls: EndPos,
 }
 
 #[derive(Debug)]
@@ -70,11 +80,10 @@ impl Track {
     }
 
     pub fn num_valid_cheats(&self, target_save: u64) -> u64 {
-        let mut visited = HashSet::new();
+        let mut visited = HashMap::new();
         let mut to_visit = vec![CostNode {
             cur_pos: self.start,
-            wall_start: None,
-            wall_end: None,
+            walls: EndPos::Resolved(None),
         }];
 
         let mut passing = HashMap::new();
@@ -83,8 +92,12 @@ impl Track {
             println!("{idx}");
             for next_node in std::mem::take(&mut to_visit) {
                 if next_node.cur_pos == self.end {
-                    if let Some(wall_start) = next_node.wall_start {
-                        if let Some(wall_end) = next_node.wall_end {
+                    if let EndPos::Resolved(Some(node)) = next_node.walls {
+                        for (wall_start, wall_end) in next_node
+                            .walls
+                            .into_iter()
+                            .filter_map(|(s, e)| Some((s, e?)))
+                        {
                             println!("Add cost: {idx}");
                             passing.entry((wall_start, wall_end)).or_insert(idx);
                         }
@@ -101,17 +114,15 @@ impl Track {
                         return passing.values().filter(|pass| **pass <= max_cost).count() as u64;
                     }
                 } else {
-                    visited.insert(next_node.clone());
+                    visited.insert(next_node.cur_pos, next_node.walls);
 
                     let new_visits = Direction::all()
                         .into_iter()
                         .flat_map(|dir| next_node.cur_pos.step_dir(dir))
                         .flat_map(|new_pos| {
                             if let Some(is_wall) = self.grid.get(new_pos).copied() {
-                                if !(next_node.wall_start.is_some() && is_wall) {
-                                    let (wall_start, wall_end) = if let Some(existing_wall) =
-                                        &next_node.wall_start
-                                    {
+                                if !next_node.walls.is_empty() || !is_wall {
+                                    let walls = if let Some(existing_wall) = &next_node.walls {
                                         (Some(*existing_wall), next_node.wall_end.or(Some(new_pos)))
                                     } else if is_wall {
                                         (Some(next_node.cur_pos), None)

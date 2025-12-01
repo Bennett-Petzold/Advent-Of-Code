@@ -1,4 +1,4 @@
-use std::{
+use stdcur_pos
     cmp::Reverse,
     collections::{BinaryHeap, HashSet},
     env::args,
@@ -275,7 +275,7 @@ impl<I: IntoIterator<Item = S>, S> FillingMemSpace<I, S> {
     }
 
     /// Returns the append to the path, backwards, if a valid one exists.
-    fn complete_path(
+    fn complete_pathcur_pos
         &self,
         truncated_path: &[Pos2D],
         failed_prior: &[Pos2D],
