@@ -17,8 +17,8 @@ fn part1(grid: &RectangleGrid<bool>) -> u64 {
 }
 
 fn part2(grid: &RectangleGrid<bool>) -> u64 {
-    // (pos, [other pos...])
-    let around_pos: HashMap<_, _> = grid
+    // (pos, count)
+    let mut around_pos: HashMap<_, _> = grid
         .positioned_items()
         .filter(|entry| *entry.value)
         .map(|entry| {
@@ -28,15 +28,9 @@ fn part2(grid: &RectangleGrid<bool>) -> u64 {
                     .position()
                     .surrounding_pos()
                     .filter(|surround| *grid.get(*surround).unwrap_or(&false))
-                    .collect::<Vec<_>>(),
+                    .count(),
             )
         })
-        .collect();
-
-    // (pos, num)
-    let mut around_pos_counts: HashMap<_, _> = around_pos
-        .iter()
-        .map(|(pos, around)| (*pos, around.len()))
         .collect();
 
     let mut total_count = 0;
@@ -45,10 +39,10 @@ fn part2(grid: &RectangleGrid<bool>) -> u64 {
     let mut to_decrement = Vec::with_capacity(around_pos.len());
 
     loop {
-        around_pos_counts.retain(|entry, count| {
+        around_pos.retain(|entry, count| {
             let remove = *count < 4;
             if remove {
-                to_decrement.extend(around_pos.get(entry).unwrap());
+                to_decrement.extend(entry.surrounding_pos());
                 total_count += 1;
             }
 
@@ -61,7 +55,7 @@ fn part2(grid: &RectangleGrid<bool>) -> u64 {
         }
 
         for elem in &to_decrement {
-            if let Some(elem) = around_pos_counts.get_mut(elem) {
+            if let Some(elem) = around_pos.get_mut(elem) {
                 *elem -= 1;
             }
         }
@@ -73,7 +67,7 @@ fn part2(grid: &RectangleGrid<bool>) -> u64 {
     total_count
 }
 
-// Executes in around 10 ms on my machine.
+// Executes in around 7 ms on my machine.
 fn main() {
     let grid = RectangleGrid::try_from_iter(
         input().map(|line| line.chars().map(|c| c == '@').collect::<Vec<_>>()),
