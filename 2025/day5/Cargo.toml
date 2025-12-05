@@ -1,0 +1,8 @@
+[package]
+name = "day5"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+advent-rust-lib = { path = "../../rust-lib" }
+derive-getters = "0.5.0"
