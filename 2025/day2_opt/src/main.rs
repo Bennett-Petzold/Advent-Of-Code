@@ -1,23 +1,14 @@
 #![feature(portable_simd)]
 
 use std::{
-    mem,
+    array, mem,
     num::ParseIntError,
     ops::RangeInclusive,
-    simd::{
-        Mask, Simd, StdFloat,
-        cmp::{SimdPartialEq, SimdPartialOrd},
-        num::{SimdFloat, SimdInt, SimdUint},
-    },
+    simd::{Mask, Simd, cmp::SimdPartialEq, num::SimdUint},
 };
 
 use advent_rust_lib::read::input;
-
-// Assuming AVX2 for optimization.
-pub const SIMD_VEC_BIT_SIZE: usize = 256;
-// Efficient packing of u64 in the vec.
-pub const SIMD_VEC_ELEMENTS: usize = 256 / (u64::BITS as usize);
-type IDSimd = Simd<u64, SIMD_VEC_ELEMENTS>;
+use multiversion::{multiversion, target::selected_target};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IDRange {
@@ -41,100 +32,106 @@ impl IDRange {
     pub const fn ids(&self) -> RangeInclusive<u64> {
         self.start..=self.end
     }
+}
 
-    #[inline]
-    /// Sums the results of count_func over all elements in range.
-    ///
-    /// FSimd needs to count up the number of passing funcs.
-    /// FSimd must not count elements that are 1.
-    pub fn simd_sums<FSimd>(&self, count_func: FSimd) -> u64
-    where
-        FSimd: Fn(IDSimd) -> u64,
-    {
-        const INIT: IDSimd = IDSimd::from_array([0, 1, 2, 3]);
-        const ADVANCE: IDSimd = IDSimd::splat(SIMD_VEC_ELEMENTS as u64);
+#[inline]
+/// Outer function that calls more efficient inners
+pub fn simd_sums_part1(mut range: IDRange) -> u64 {
+    macro_rules! simd_sums_inner {
+        ($uint:ty, $int:ty) => {
+            paste::paste! {
+                #[inline]
+                #[multiversion(targets = "simd")]
+                fn [<simd_sums_inner_ $uint>](start: $uint, end: $uint, num_digits: u32) -> $uint {
+                    const SIMD_VEC_ELEMENTS: usize =
+                        selected_target!().suggested_simd_width::<$uint>().unwrap();
+                    type IdSimd = Simd<$uint, SIMD_VEC_ELEMENTS>;
 
-        let mut remaining_len = (self.end - self.start) + 1;
-        let mut acting_array = Simd::splat(self.start) + INIT;
-        let mut sum = 0;
+                    let init: IdSimd = Simd::from_array(array::from_fn(|idx| idx as $uint));
+                    const ADVANCE: IdSimd = Simd::splat(SIMD_VEC_ELEMENTS as $uint);
 
-        loop {
-            if remaining_len < (SIMD_VEC_ELEMENTS as u64) {
-                for loc in &mut acting_array.as_mut_array()[remaining_len as usize..] {
-                    *loc = 1;
+                    const TEN: $uint = 10;
+
+                    let mut remaining_len = (end - start) + 1;
+                    let mut acting_array = Simd::splat(start) + init;
+                    let mut sum = 0;
+
+                    let div = Simd::splat(TEN.pow(num_digits.div_ceil(2)));
+
+                    loop {
+                        if remaining_len < (SIMD_VEC_ELEMENTS as $uint) {
+                            for loc in &mut acting_array.as_mut_array()[remaining_len as usize..] {
+                                *loc = 1;
+                            }
+                        }
+
+                        // Sum function
+                        {
+                            // Creates a bitmask
+                            let passing = (acting_array / div).simd_eq(acting_array % div);
+                            // Zero all non-passing values
+                            // Transmute is necessary to keep the all-1 bit fields.
+                            // SAFETY: SIMD types have the same size and are numbers.
+                            let masked_ones =
+                                unsafe { mem::transmute::<Mask<$int, SIMD_VEC_ELEMENTS>, IdSimd>(passing) }
+                                    & acting_array;
+
+                            // Adds all true results
+                            sum += masked_ones.reduce_sum()
+                        }
+
+                        // Loops ends when no elements are left
+                        remaining_len = remaining_len.saturating_sub(SIMD_VEC_ELEMENTS as $uint);
+                        if remaining_len == 0 {
+                            break;
+                        }
+                        // All elements step up by the given size
+                        acting_array += ADVANCE;
+                    }
+
+                    sum
                 }
             }
-
-            sum += count_func(acting_array);
-
-            // Loops ends when no elements are left
-            remaining_len = remaining_len.saturating_sub(SIMD_VEC_ELEMENTS as u64);
-            if remaining_len == 0 {
-                break;
-            }
-            // All elements step up by the given size
-            acting_array += ADVANCE;
-        }
-
-        sum
+        };
     }
 
-    #[inline]
-    /// Sums the results of count_func over all elements in range.
-    ///
-    /// FSimd needs to count up the number of passing funcs.
-    /// FSimd must not count elements that are 1.
-    pub fn simd_sums_part1(&self) -> u64 {
-        const INIT: IDSimd = IDSimd::from_array([0, 1, 2, 3]);
-        const ADVANCE: IDSimd = IDSimd::splat(SIMD_VEC_ELEMENTS as u64);
+    simd_sums_inner!(u64, i64);
+    simd_sums_inner!(u32, i32);
+    simd_sums_inner!(u16, i16);
+    simd_sums_inner!(u8, i8);
 
-        let mut remaining_len = (self.end - self.start) + 1;
-        let mut acting_array = Simd::splat(self.start) + INIT;
-        let mut sum = 0;
+    let mut remainder = None;
 
-        loop {
-            if remaining_len < (SIMD_VEC_ELEMENTS as u64) {
-                for loc in &mut acting_array.as_mut_array()[remaining_len as usize..] {
-                    *loc = 1;
-                }
-            }
+    // Makes sure entire range shares the number of digits
+    let first_num_digits = ((range.start as f32).log10() as u8) + 1;
+    let last_num_digits = ((range.end as f32).log10() as u8) + 1;
 
-            // Sum function
-            {
-                let first_num_digits = (acting_array.as_array()[0] as f32).log10() as u32;
-                let all_num_digits = (acting_array.cast::<f32>()).log10().cast::<u32>();
+    if first_num_digits != last_num_digits {
+        let split = 10_u64.pow(first_num_digits as u32);
 
-                let base_div = Simd::splat(10_u64.pow((first_num_digits + 1) / 2));
-                let greater = Simd::splat(first_num_digits).simd_gt(all_num_digits);
-                let div_mult = greater
-                    .cast::<i64>()
-                    .select(Simd::splat(10), Simd::splat(1));
-                let div = base_div * div_mult;
-
-                // Creates a bitmask
-                let passing = (acting_array / div).simd_eq(acting_array % div);
-                // Zero all non-passing values
-                // Transmute is necessary to keep the all-1 bit fields.
-                // SAFETY: SIMD types have the same size and are numbers.
-                let masked_ones =
-                    unsafe { mem::transmute::<Mask<i64, SIMD_VEC_ELEMENTS>, IDSimd>(passing) }
-                        & acting_array;
-
-                // Adds all true results
-                sum += masked_ones.reduce_sum()
-            }
-
-            // Loops ends when no elements are left
-            remaining_len = remaining_len.saturating_sub(SIMD_VEC_ELEMENTS as u64);
-            if remaining_len == 0 {
-                break;
-            }
-            // All elements step up by the given size
-            acting_array += ADVANCE;
-        }
-
-        sum
+        remainder = Some(IDRange {
+            start: split,
+            end: range.end,
+        });
+        range.end = split - 1;
     }
+
+    let sum = match range.end {
+        end if end <= (u8::MAX as u64) => {
+            simd_sums_inner_u8(range.start as u8, end as u8, first_num_digits as u32) as u64
+        }
+        end if end <= (u16::MAX as u64) => {
+            simd_sums_inner_u16(range.start as u16, end as u16, first_num_digits as u32) as u64
+        }
+        end if end <= (u32::MAX as u64) => {
+            simd_sums_inner_u32(range.start as u32, end as u32, first_num_digits as u32) as u64
+        }
+        // Presumed <= u64::MAX, undefined if this is false
+        end => simd_sums_inner_u64(range.start, end, first_num_digits as u32),
+    };
+
+    //let div = Simd::splat(10_u64.pow((first_num_digits + 1) / 2));
+    sum + remainder.map_or(0, simd_sums_part1)
 }
 
 // Keeping as digits instead of string digit transforms should be cheaper.
@@ -158,47 +155,11 @@ fn is_at_least_one_repeated(id: u64) -> bool {
         })
 }
 
-/*
 fn part1<IDs>(input: IDs) -> u64
 where
     IDs: Iterator<Item = IDRange>,
 {
-    input
-        .map(|range| {
-            range.simd_sums(|vec| {
-                const ONE_VEC: Simd<u32, SIMD_VEC_ELEMENTS> = Simd::splat(1);
-
-                let num_digits = (vec.cast::<f32>()).log10().cast::<u32>() + ONE_VEC;
-
-                // Nice splat if all entries are equal, unfortunate per-element otherwise
-                let div = if num_digits.reduce_and() == num_digits.as_array()[0] {
-                    Simd::splat(10_u64.pow((num_digits.as_array()[0] / 2) as u32))
-                } else {
-                    Simd::from_array(num_digits.as_array().map(|entry| 10_u64.pow(entry / 2)))
-                };
-
-                // Creates a bitmask
-                let passing = (vec / div).simd_eq(vec % div);
-                // Zero all non-passing values
-                // Transmute is necessary to keep the all-1 bit fields.
-                // SAFETY: SIMD types have the same size and are numbers.
-                let masked_ones = unsafe {
-                    mem::transmute::<Simd<i64, SIMD_VEC_ELEMENTS>, IDSimd>(passing.to_int())
-                } & vec;
-
-                // Adds all true results
-                masked_ones.reduce_sum()
-            })
-        })
-        .sum()
-}
-*/
-
-fn part1<IDs>(input: IDs) -> u64
-where
-    IDs: Iterator<Item = IDRange>,
-{
-    input.map(|range| range.simd_sums_part1()).sum()
+    input.map(simd_sums_part1).sum()
 }
 
 fn part2<IDs>(input: IDs) -> u64
@@ -211,7 +172,7 @@ where
         .sum()
 }
 
-// About _ ms execution on my machine.
+// About 124 ms execution on my machine.
 fn main() {
     let id_ranges = {
         let input_line = input().next().unwrap();

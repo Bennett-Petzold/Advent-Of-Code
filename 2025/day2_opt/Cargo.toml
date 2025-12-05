@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 advent-rust-lib = { path = "../../rust-lib" }
+multiversion = "0.8.0"
+paste = "1.0.15"
+target-features = "0.1.6"
