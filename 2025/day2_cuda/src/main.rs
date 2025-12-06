@@ -30,36 +30,6 @@ impl IDRange {
     }
 }
 
-fn is_single_repeated(id: u64) -> bool {
-    let num_digits = ((id as f32).log10() as u32) + 1;
-    // Splits digits evenly in half
-    let div = 10_u64.pow(num_digits / 2);
-
-    // Div gets top, mod gets bottom
-    (id / div) == (id % div)
-}
-
-// Keeping as digits instead of string digit transforms should be cheaper.
-fn is_at_least_one_repeated(id: u64) -> bool {
-    let num_digits = ((id as f32).log10() as u32) + 1;
-
-    // Moving digit split
-    (1..=(num_digits / 2))
-        // Fully repeated sequences require even division
-        .filter(|cut| num_digits.is_multiple_of(*cut))
-        .any(|cut| {
-            let div = 10_u64.pow(cut);
-
-            // Check that all N slices of the number have the sequence
-            let mut rolling = id;
-            let val = id % div;
-            (1..(num_digits / cut)).all(|_rep| {
-                rolling /= div;
-                (rolling % div) == val
-            })
-        })
-}
-
 fn part1<IDs>(input: IDs) -> u64
 where
     IDs: Iterator<Item = IDRange>,
@@ -73,10 +43,9 @@ fn part2<IDs>(input: IDs) -> u64
 where
     IDs: Iterator<Item = IDRange>,
 {
-    input
-        .flat_map(|range| range.ids())
-        .filter(|id| is_at_least_one_repeated(*id))
-        .sum()
+    let input_expanded: Vec<_> = input.flat_map(|range| range.ids()).collect();
+    let init = InitStream::init(&input_expanded).unwrap();
+    Task::part2(&init).unwrap().resolve().unwrap()
 }
 
 // About 149 ms execution on my machine.

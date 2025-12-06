@@ -59,6 +59,8 @@ mod abi {
 
         pub fn run_part1(stream: cudaStream_t, init: *const maybeCudaBuffer) -> maybeKernelResults;
 
+        pub fn run_part2(stream: cudaStream_t, init: *const maybeCudaBuffer) -> maybeKernelResults;
+
         pub fn cuda_err_string(error: cudaError_t) -> *const c_char;
 
         pub fn cuda_success_value() -> cudaError_t;
@@ -187,6 +189,10 @@ impl<'a> Task<'a> {
 
     pub fn part1(init: &'a InitStream<'a>) -> Result<Self, &'static str> {
         Self::create(init, run_part1)
+    }
+
+    pub fn part2(init: &'a InitStream<'a>) -> Result<Self, &'static str> {
+        Self::create(init, run_part2)
     }
 
     pub fn resolve(self) -> Result<u64, &'static str> {
