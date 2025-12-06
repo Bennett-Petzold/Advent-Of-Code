@@ -30,33 +30,19 @@ impl IDRange {
     }
 }
 
-fn part1<IDs>(input: IDs) -> u64
-where
-    IDs: Iterator<Item = IDRange>,
-{
-    let input_expanded: Vec<_> = input.flat_map(|range| range.ids()).collect();
-    let init = InitStream::init(&input_expanded).unwrap();
-    Task::part1(&init).unwrap().resolve().unwrap()
-}
-
-fn part2<IDs>(input: IDs) -> u64
-where
-    IDs: Iterator<Item = IDRange>,
-{
-    let input_expanded: Vec<_> = input.flat_map(|range| range.ids()).collect();
-    let init = InitStream::init(&input_expanded).unwrap();
-    Task::part2(&init).unwrap().resolve().unwrap()
-}
-
-// About 149 ms execution on my machine.
+// About 271 ms execution on my machine.
 fn main() {
-    let id_ranges = {
+    let all_ids = {
         let input_line = input().next().unwrap();
         IDRange::find(&input_line)
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
+            .flat_map(|range| range.unwrap().ids())
+            .collect::<Vec<_>>()
+            .into_boxed_slice()
     };
+    let init = InitStream::init(&all_ids).unwrap();
+    let part1 = Task::part1(&init).unwrap();
+    let part2 = Task::part2(&init).unwrap();
 
-    println!("Part 1: {}", part1(id_ranges.iter().copied()));
-    println!("Part 2: {}", part2(id_ranges.into_iter()));
+    println!("Part 1: {}", part1.resolve().unwrap());
+    println!("Part 2: {}", part2.resolve().unwrap());
 }

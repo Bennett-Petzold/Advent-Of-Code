@@ -15,8 +15,8 @@ __device__ void part1_inner(uint64_t *item) {
       100000u, 1000000u, 10000000u, 100000000u, 1000000000u,
   };
 
-  const uint32_t num_digits = cuda::ilog10(*item) + 1;
-  const unsigned long long int div = div_lookup[(num_digits / 2)];
+  const uint8_t num_digits = cuda::ilog10(*item) + 1;
+  const uint64_t div = div_lookup[(num_digits / 2)];
 
   // Placeholder
   const bool passes = (*item / div) == (*item % div);
@@ -36,39 +36,21 @@ __global__ void part1_512threads(const uint64_t *input, uint64_t *output) {
   part1_inner(&item);
 
   // Collect sums into thread 0 and write to output.
-  const unsigned long long int sum = BlockReduce(sum_storage).Sum(item);
-  if (threadIdx.x == 0) {
-    output[blockIdx.x] = sum;
-  }
-}
-
-__global__ void part1_1024threads(const uint64_t *input, uint64_t *output) {
-  using BlockReduce =
-      cub::BlockReduce<unsigned long long int, 1024,
-                       cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>;
-  __shared__ typename BlockReduce::TempStorage sum_storage;
-
-  const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
-  uint64_t item = input[idx];
-
-  part1_inner(&item);
-
-  // Collect sums into thread 0 and write to output.
-  unsigned long long int sum = BlockReduce(sum_storage).Sum(item);
+  const uint64_t sum = BlockReduce(sum_storage).Sum(item);
   if (threadIdx.x == 0) {
     output[blockIdx.x] = sum;
   }
 }
 
 __device__ void part2_inner(uint64_t *item) {
-  const uint32_t num_digits = cuda::ilog10(*item) + 1;
+  const uint8_t num_digits = cuda::ilog10(*item) + 1;
 
   uint64_t div = 1;
 
   // All these loops should match for most warps.
   // Close numbers will give the same digit counts.
   // Otherwise they will diverge on the extra outer loop.
-  for (uint32_t cut = 1; cut <= (num_digits / 2); ++cut) {
+  for (uint8_t cut = 1; cut <= (num_digits / 2); ++cut) {
     // Go to the next 10**N.
     div *= 10;
 
