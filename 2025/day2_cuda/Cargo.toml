@@ -1,0 +1,10 @@
+[package]
+name = "day2_cuda"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+advent-rust-lib = { path = "../../rust-lib" }
+
+[build-dependencies]
+cc = "1.2.48"
