@@ -13,10 +13,22 @@ use crate::{
 };
 
 /// Position in a 2D grid
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Pos2D {
     pub x: usize,
     pub y: usize,
+}
+
+impl PartialOrd for Pos2D {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Pos2D {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.y.cmp(&other.y).then(self.x.cmp(&other.x))
+    }
 }
 
 impl Display for Pos2D {
@@ -384,6 +396,21 @@ impl<T> RectangleGrid<T> {
             inner: vec![default; x_max * y_max].into_boxed_slice(),
             x_max,
             y_max,
+        }
+    }
+
+    pub fn map<Map, U>(&self, map: Map) -> RectangleGrid<U>
+    where
+        Map: FnMut(GridEntry<'_, T>) -> U,
+    {
+        RectangleGrid {
+            inner: self
+                .positioned_items()
+                .map(map)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            x_max: self.x_max(),
+            y_max: self.y_max(),
         }
     }
 }
