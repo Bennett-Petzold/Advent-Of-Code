@@ -1,0 +1,7 @@
+[package]
+name = "day9"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+advent-rust-lib = { path = "../../rust-lib", features = ["num"] }

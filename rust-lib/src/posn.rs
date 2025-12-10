@@ -2,8 +2,8 @@ use std::{
     array,
     cmp::Ordering,
     fmt::{Debug, Display},
-    iter::Sum,
-    ops::{Add, AddAssign, Mul, Sub, SubAssign},
+    iter::{Product, Sum},
+    ops::{Add, AddAssign, Mul, Sub},
 };
 
 use num::{cast::AsPrimitive, CheckedSub};
@@ -110,5 +110,14 @@ where
         // Euclid distance from each other is the same as the absolute
         // difference's euclid distance from origin.
         self.abs_diff(other).euclid_dist_from_origin()
+    }
+}
+
+impl<T, const N: usize> Pos<T, N>
+where
+    T: for<'a> Product<&'a T>,
+{
+    pub fn area(&self) -> T {
+        self.coordinates.iter().product()
     }
 }
